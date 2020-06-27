@@ -1,0 +1,2 @@
+rootProject.name = "AndroidFaceMaskDetection"
+include ':app'
