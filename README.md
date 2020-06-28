@@ -5,31 +5,27 @@ A small machine-learning app to predict wearing face-mask or not.
 
 Use [CameraX](https://developer.android.com/training/camerax) to get camera preview(live-screen) without distinguishing camera and camera2.
 
-Use on-device machine-learning framework [Tensorflow-Lite](https://www.tensorflow.org/lite) for local model prediction.
+Use on-device machine-learning framework [Tensorflow-Lite](https://www.tensorflow.org/lite) for local model prediction, no cloud network requred, totally offline.
 
-Use Android's gradle tool `>= 4.1.0` to generate client [Tensorflow-Lite](https://www.tensorflow.org/lite) model proxy easily.
+Use Android's gradle tool `>= 4.1.0` to generate client [Tensorflow-Lite](https://www.tensorflow.org/lite) model proxy easily. With the new Tool, the proxy of the model can be generated without having to feel discouraged about complicated byte operations.
 
 📝: The CameraX and TF-lite APIs are still not in RELEASE, all APIs and usage of them could be changed in the future.
 
 # Tech stack
 
 - [CameraX](https://developer.android.com/training/camerax)
-
+    - [CameraX](https://developer.android.com/training/camerax) is the modern camera API of Android development, back-port to Android 5. Saving code to determine camera and camera2 because of Android's version fragments.
+    - Constraint the camera inside a lifecycle(`androidx.camera.lifecycle`), don't need to care of disposing and resource wasting, there will be no more memory leaks.
+    - Setup camera with new configurable binding logic on the lifecycle.
+    
 - [Tensorflow-Lite](https://www.tensorflow.org/lite) 
-
+    - [Tensorflow-Lite](https://www.tensorflow.org/lite), on-device local ML framework.
+    
 - Android's gradle tool `>= 4.1.0`: Android Studio 4.1 is at-least required.
 
 - [ActivityResultContract](https://developer.android.com/reference/androidx/activity/result/contract/ActivityResultContract) (still WIP for camera permission handling)
-
-# Intro
-
-[CameraX](https://developer.android.com/training/camerax) is the modern camera API of Android development, back-port to Android 5. Saving code to determine camera and camera2 because of Android's version fragments.
-
-Constraint the camera inside a lifecycle(`androidx.camera.lifecycle`), don't need to care of disposing and resource wasting.
-
-Setup camera with new configurable binding logic on the lifecycle.
-
-## How does CameraX work
+ 
+# How does CameraX work
 
 1. Create `ExecutorService` for processing bitmap or image analysis.
 2. Require camera permission if the permission is not granted.
@@ -37,7 +33,7 @@ Setup camera with new configurable binding logic on the lifecycle.
 4. Bind different functionalities on the `ProcessCameraProvider`.
 5. An object ` ImageAnalysis.Analyzer ` for `ImageAnalysis`.
 
-### dito
+## dito
 
 - `setupCameraThread`: Create `ExecutorService`.
 - `setupCameraControllers`: Some controllers, like switch of camera lens-facing.
@@ -48,7 +44,7 @@ Setup camera with new configurable binding logic on the lifecycle.
     - `ImageAnalysis`: Working with an `ExecutorService` and analyze every frame (bitmap).
         - An object of ` ImageAnalysis.Analyzer ` is required.
 
-## How does Tensorflow-Lite and Grade-Tool work
+# How does Tensorflow-Lite and Grade-Tool work
 
 1. Have a machine-learning model for face-mask prediction which has been trained and converted to lite-mode, you can find it [here](app/src/main/ml/face_mask_detection.tflite).
 
@@ -65,7 +61,7 @@ Setup camera with new configurable binding logic on the lifecycle.
     
     ![Generate](media/generate-tf-model-for-android.png)
 
-### dito
+## dito
 
 - `setupML`: Initialize  model proxy, set extra options eg: GPU or number of running thread.
 
