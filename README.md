@@ -49,7 +49,7 @@ Use Android's gradle tool `>= 4.1.0` to generate client [Tensorflow-Lite](https:
 1. Have a machine-learning model for face-mask prediction which has been trained and converted to lite-mode, you can find it [here](app/src/main/ml/face_mask_detection.tflite).
 
 2. Use Android Studio to import the model.
-    - Start the tool: the menu selection on **New/Others/Tensorflow Lite Model**
+    - Start the tool: the menu selection on **New/Other/Tensorflow Lite Model**
 
     ![Start](media/start-tflite-tool.png)
 
