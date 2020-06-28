@@ -248,8 +248,6 @@ class MainActivity : AppCompatActivity(R.layout.activity_main) {
                     if (category.label == "without_mask") R.color.red else R.color.green
                 )
                 pb_output.progress = (category.score * 100).toInt()
-
-                Log.d(TAG, output.toString())
             }
         }
     }
