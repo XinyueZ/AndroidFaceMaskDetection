@@ -3,9 +3,9 @@ Android face-mask detection
 
 A small machine-learning app to predict wearing face-mask or not.
 
-Use [CameraX](https://developer.android.com/training/camerax) to get camera preview without distinguishing camera and camera2.
+Use [CameraX](https://developer.android.com/training/camerax) to get camera preview(live-screen) without distinguishing camera and camera2.
 
-Use on-device machine-learning framework [Tensorflow-Lite](https://www.tensorflow.org/lite) gives easy local model prediction.
+Use on-device machine-learning framework [Tensorflow-Lite](https://www.tensorflow.org/lite) for local model prediction.
 
 Use Android's gradle tool `>= 4.1.0` to generate client [Tensorflow-Lite](https://www.tensorflow.org/lite) model proxy easily.
 
@@ -45,7 +45,7 @@ Setup camera with new configurable binding logic on the lifecycle.
 - `setupCameraUseCases`: Binding functionalities.  
     - `CameraSelector`: Switch camera lens-facing.
     - `Preview`: Preview screen (live-screen).
-    - `ImageAnalysis`: Working with an `ExecutorService` and analyze the every frames (bitmap).
+    - `ImageAnalysis`: Working with an `ExecutorService` and analyze every frame (bitmap).
         - An object of ` ImageAnalysis.Analyzer ` is required.
 
 ## How does Tensorflow-Lite and Grade-Tool work
@@ -54,10 +54,15 @@ Setup camera with new configurable binding logic on the lifecycle.
 
 2. Use Android Studio to import the model.
     - Start the tool
+
     ![Start](media/start-tflite-tool.png)
+
     - Import model
+
     ![Import](media/select-tf-model.png)
+
     - Generate client model proxy
+    
     ![Generate](media/generate-tf-model-for-android.png)
 
 ### dito
