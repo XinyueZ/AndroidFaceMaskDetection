@@ -1,8 +1,13 @@
 package io.face.mask.detection
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.media.Image
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
@@ -13,18 +18,24 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.common.util.concurrent.ListenableFuture
+import io.face.mask.detection.ml.FackMaskDetection
 import kotlinx.android.synthetic.main.activity_main.*
-import java.nio.ByteBuffer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.label.Category
+import org.tensorflow.lite.support.model.Model
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-typealias AnalyzerListener = (pixel: Double) -> Unit
+typealias CameraBitmapOutputListener = (bitmap: Bitmap) -> Unit
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(R.layout.activity_main) {
     private var preview: Preview? = null
     private var imageAnalyzer: ImageAnalysis? = null
     private var cameraProvider: ProcessCameraProvider? = null
@@ -37,7 +48,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setupML()
 
         setupCameraThread()
         setupCameraControllers()
@@ -48,7 +59,6 @@ class MainActivity : AppCompatActivity() {
             setupCamera()
         }
     }
-
 
     private fun setupCameraThread() {
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -72,7 +82,7 @@ class MainActivity : AppCompatActivity() {
                 CameraSelector.LENS_FACING_FRONT
             }
             setLensButtonIcon()
-            bindCameraUseCases()
+            setupCameraUseCases()
         }
 
         try {
@@ -105,7 +115,7 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun bindCameraUseCases() {
+    private fun setupCameraUseCases() {
         // Lens-facing selector
         val cameraSelector: CameraSelector =
             CameraSelector.Builder().requireLensFacing(lensFacing)
@@ -127,8 +137,8 @@ class MainActivity : AppCompatActivity() {
             .setTargetRotation(rotation)
             .build()
             .also {
-                it.setAnalyzer(cameraExecutor, AppImageAnalysis { luma ->
-                    Log.d(TAG, "Average luminosity: $luma")
+                it.setAnalyzer(cameraExecutor, BitmapOutputAnalysis(applicationContext) { bitmap ->
+                    setupMLOutput(bitmap)
                 })
             }
 
@@ -146,6 +156,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     private fun setupCamera() {
         val cameraProviderFuture: ListenableFuture<ProcessCameraProvider> =
             ProcessCameraProvider.getInstance(this)
@@ -154,13 +165,13 @@ class MainActivity : AppCompatActivity() {
             cameraProvider = cameraProviderFuture.get()
 
             lensFacing = when {
-                hasBackCamera -> CameraSelector.LENS_FACING_BACK
                 hasFrontCamera -> CameraSelector.LENS_FACING_FRONT
+                hasBackCamera -> CameraSelector.LENS_FACING_BACK
                 else -> throw IllegalStateException("No cameras on this devices")
             }
 
             setupCameraControllers()
-            bindCameraUseCases()
+            setupCameraUseCases()
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -204,6 +215,45 @@ class MainActivity : AppCompatActivity() {
         return AspectRatio.RATIO_16_9
     }
 
+    private lateinit var faceMaskDetection: FackMaskDetection
+
+    private fun setupML() {
+        val options: Model.Options =
+            Model.Options.Builder().setDevice(Model.Device.GPU).setNumThreads(5).build()
+        faceMaskDetection = FackMaskDetection.newInstance(applicationContext, options)
+    }
+
+    private fun setupMLOutput(bitmap: Bitmap) {
+        val tensorImage: TensorImage = TensorImage.fromBitmap(bitmap)
+        val result: FackMaskDetection.Outputs = faceMaskDetection.process(tensorImage)
+        val output: List<Category> =
+            result.probabilityAsCategoryList.apply {
+                sortByDescending { res -> res.score }
+            }
+        lifecycleScope.launch(Dispatchers.Main) {
+            output.firstOrNull()?.let { category ->
+                tv_output.text = category.label
+                tv_output.setTextColor(
+                    ContextCompat.getColor(
+                        applicationContext,
+                        if (category.label == "without_mask") R.color.red else R.color.green
+                    )
+                )
+                overlay.background = getDrawable(
+                    if (category.label == "without_mask") R.drawable.red_border else R.drawable.green_border
+                )
+
+                pb_output.progressTintList = AppCompatResources.getColorStateList(
+                    applicationContext,
+                    if (category.label == "without_mask") R.color.red else R.color.green
+                )
+                pb_output.progress = (category.score * 100).toInt()
+
+                Log.d(TAG, output.toString())
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "Face-Mask-Detection"
         private const val REQUEST_CODE_PERMISSIONS = 0x98
@@ -213,23 +263,48 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-private class AppImageAnalysis(private val listener: AnalyzerListener) :
+private class BitmapOutputAnalysis(
+    context: Context,
+    private val listener: CameraBitmapOutputListener
+) :
     ImageAnalysis.Analyzer {
 
-    private fun ByteBuffer.toByteArray(): ByteArray {
-        rewind()    // Rewind the buffer to zero
-        val data = ByteArray(remaining())
-        get(data)   // Copy the buffer into a byte array
-        return data // Return the byte array
+    private val yuvToRgbConverter = YuvToRgbConverter(context)
+    private lateinit var bitmapBuffer: Bitmap
+    private lateinit var rotationMatrix: Matrix
+
+    @SuppressLint("UnsafeExperimentalUsageError")
+    private fun ImageProxy.toBitmap(): Bitmap? {
+
+        val image: Image = this.image ?: return null
+
+        if (!::bitmapBuffer.isInitialized) {
+            rotationMatrix = Matrix()
+            rotationMatrix.postRotate(this.imageInfo.rotationDegrees.toFloat())
+            bitmapBuffer = Bitmap.createBitmap(
+                this.width, this.height, Bitmap.Config.ARGB_8888
+            )
+        }
+
+        // Pass image to an image analyser
+        yuvToRgbConverter.yuvToRgb(image, bitmapBuffer)
+
+        // Create the Bitmap in the correct orientation
+        return Bitmap.createBitmap(
+            bitmapBuffer,
+            0,
+            0,
+            bitmapBuffer.width,
+            bitmapBuffer.height,
+            rotationMatrix,
+            false
+        )
     }
 
-    override fun analyze(image: ImageProxy) {
-        val buffer: ByteBuffer = image.planes[0].buffer
-        val data: ByteArray = buffer.toByteArray()
-        val pixels: List<Int> = data.map { it.toInt() and 0xFF }
-        val pixelsAverage: Double = pixels.average()
-
-        listener(pixelsAverage)
-        image.close()
+    override fun analyze(imageProxy: ImageProxy) {
+        imageProxy.toBitmap()?.let {
+            listener(it)
+        }
+        imageProxy.close()
     }
 }
