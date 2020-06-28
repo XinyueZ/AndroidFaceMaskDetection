@@ -27,10 +27,10 @@ Use Android's gradle tool `>= 4.1.0` to generate client [Tensorflow-Lite](https:
  
 # How does CameraX work
 
-1. Create `ExecutorService` for processing bitmap or image analysis.
+1. An `ExecutorService` for processing bitmap or image analysis.
 2. Require camera permission if the permission is not granted.
-3. Create a `ProcessCameraProvider`.
-4. Bind different functionalities on the `ProcessCameraProvider`.
+3. A `ProcessCameraProvider` which provides camera specifications, eg: availability of front/rear face.
+4. Bind different functionalities on the or depending on `ProcessCameraProvider`.
 5. An object ` ImageAnalysis.Analyzer ` for `ImageAnalysis`.
 
 ## dito
